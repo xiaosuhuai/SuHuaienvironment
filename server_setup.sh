@@ -56,6 +56,45 @@ detect_os() {
     log_info "检测到操作系统: $OS $OS_VERSION"
 }
 
+# 检查pip是否已安装并可用于Python 3.11
+check_pip() {
+    log_info "检查Python 3.11的pip..."
+    if python3.11 -m pip --version &> /dev/null; then
+        log_info "Python 3.11 已自带pip，无需额外安装"
+        return 0
+    else
+        log_info "Python 3.11 没有可用的pip，需要安装"
+        return 1
+    fi
+}
+
+# 安装pip
+install_pip() {
+    log_info "安装pip..."
+    # 使用--ignore-installed避免卸载系统pip
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 - --ignore-installed
+    
+    # 确保pip命令可用
+    if [ ! -L /usr/bin/pip ]; then
+        # 使用软链接前先检查目标是否存在
+        if [ -f /usr/local/bin/pip3.11 ]; then
+            ln -sf /usr/local/bin/pip3.11 /usr/bin/pip
+        elif [ -f ~/.local/bin/pip3.11 ]; then
+            ln -sf ~/.local/bin/pip3.11 /usr/bin/pip
+        fi
+    fi
+    if [ ! -L /usr/bin/pip3 ]; then
+        # 使用软链接前先检查目标是否存在
+        if [ -f /usr/local/bin/pip3.11 ]; then
+            ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3
+        elif [ -f ~/.local/bin/pip3.11 ]; then
+            ln -sf ~/.local/bin/pip3.11 /usr/bin/pip3
+        fi
+    fi
+    
+    log_info "pip安装完成"
+}
+
 # 安装Python 3.11和pip
 install_python() {
     log_info "检查Python 3.11..."
@@ -63,6 +102,8 @@ install_python() {
     # 检查Python是否已安装
     if command -v python3.11 &> /dev/null; then
         log_info "Python 3.11 已安装"
+        # 检查pip是否已经随Python一起安装
+        check_pip || install_pip
     else
         log_info "开始安装Python 3.11..."
         
@@ -78,27 +119,8 @@ install_python() {
             apt update
             apt install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils
             
-            # 安装pip - 使用--ignore-installed避免卸载系统pip
-            log_info "安装pip..."
-            curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 - --ignore-installed
-            
-            # 确保pip命令可用
-            if [ ! -L /usr/bin/pip ]; then
-                # 使用软链接前先检查目标是否存在
-                if [ -f /usr/local/bin/pip3.11 ]; then
-                    ln -sf /usr/local/bin/pip3.11 /usr/bin/pip
-                elif [ -f ~/.local/bin/pip3.11 ]; then
-                    ln -sf ~/.local/bin/pip3.11 /usr/bin/pip
-                fi
-            fi
-            if [ ! -L /usr/bin/pip3 ]; then
-                # 使用软链接前先检查目标是否存在
-                if [ -f /usr/local/bin/pip3.11 ]; then
-                    ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3
-                elif [ -f ~/.local/bin/pip3.11 ]; then
-                    ln -sf ~/.local/bin/pip3.11 /usr/bin/pip3
-                fi
-            fi
+            # 检查pip是否已经随Python一起安装
+            check_pip || install_pip
         elif [[ "$OS" == "CentOS"* ]] || [[ "$OS" == "Red Hat"* ]] || [[ "$OS" == "Fedora"* ]]; then
             # 在CentOS/RHEL上安装Python 3.11
             if [[ "$OS" == "CentOS"* ]] && [[ "$OS_VERSION" == "7"* ]]; then
@@ -113,27 +135,8 @@ install_python() {
                 ./configure --enable-optimizations
                 make altinstall
                 
-                # 安装pip - 使用--ignore-installed避免卸载系统pip
-                log_info "安装pip..."
-                curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 - --ignore-installed
-                
-                # 确保pip命令可用
-                if [ ! -L /usr/bin/pip ]; then
-                    # 使用软链接前先检查目标是否存在
-                    if [ -f /usr/local/bin/pip3.11 ]; then
-                        ln -sf /usr/local/bin/pip3.11 /usr/bin/pip
-                    elif [ -f ~/.local/bin/pip3.11 ]; then
-                        ln -sf ~/.local/bin/pip3.11 /usr/bin/pip
-                    fi
-                fi
-                if [ ! -L /usr/bin/pip3 ]; then
-                    # 使用软链接前先检查目标是否存在
-                    if [ -f /usr/local/bin/pip3.11 ]; then
-                        ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3
-                    elif [ -f ~/.local/bin/pip3.11 ]; then
-                        ln -sf ~/.local/bin/pip3.11 /usr/bin/pip3
-                    fi
-                fi
+                # 检查pip是否已经随Python一起安装
+                check_pip || install_pip
                 
                 cd /tmp
                 rm -rf Python-3.11.0*
@@ -141,61 +144,15 @@ install_python() {
                 # CentOS 8/Fedora/RHEL 8
                 dnf install -y python3.11 python3.11-devel
                 
-                # 安装pip - 使用--ignore-installed避免卸载系统pip
-                log_info "安装pip..."
-                curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 - --ignore-installed
-                
-                # 确保pip命令可用
-                if [ ! -L /usr/bin/pip ]; then
-                    # 使用软链接前先检查目标是否存在
-                    if [ -f /usr/local/bin/pip3.11 ]; then
-                        ln -sf /usr/local/bin/pip3.11 /usr/bin/pip
-                    elif [ -f ~/.local/bin/pip3.11 ]; then
-                        ln -sf ~/.local/bin/pip3.11 /usr/bin/pip
-                    fi
-                fi
-                if [ ! -L /usr/bin/pip3 ]; then
-                    # 使用软链接前先检查目标是否存在
-                    if [ -f /usr/local/bin/pip3.11 ]; then
-                        ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3
-                    elif [ -f ~/.local/bin/pip3.11 ]; then
-                        ln -sf ~/.local/bin/pip3.11 /usr/bin/pip3
-                    fi
-                fi
+                # 检查pip是否已经随Python一起安装
+                check_pip || install_pip
             fi
         else
             log_error "不支持的操作系统: $OS"
             exit 1
         fi
         
-        log_info "Python 3.11 和 pip 安装完成"
-    fi
-    
-    # 检查pip是否已安装
-    if ! command -v pip &> /dev/null; then
-        log_info "安装pip..."
-        # 使用--ignore-installed避免卸载系统pip
-        curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 - --ignore-installed
-        
-        # 确保pip命令可用
-        if [ ! -L /usr/bin/pip ]; then
-            # 使用软链接前先检查目标是否存在
-            if [ -f /usr/local/bin/pip3.11 ]; then
-                ln -sf /usr/local/bin/pip3.11 /usr/bin/pip
-            elif [ -f ~/.local/bin/pip3.11 ]; then
-                ln -sf ~/.local/bin/pip3.11 /usr/bin/pip
-            fi
-        fi
-        if [ ! -L /usr/bin/pip3 ]; then
-            # 使用软链接前先检查目标是否存在
-            if [ -f /usr/local/bin/pip3.11 ]; then
-                ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3
-            elif [ -f ~/.local/bin/pip3.11 ]; then
-                ln -sf ~/.local/bin/pip3.11 /usr/bin/pip3
-            fi
-        fi
-    else
-        log_info "pip 已安装"
+        log_info "Python 3.11安装完成"
     fi
     
     # 将Python 3.11设置为默认Python版本
@@ -228,7 +185,7 @@ install_python() {
     log_info "验证Python和pip版本..."
     python3 --version
     python --version
-    pip --version || log_warn "pip命令可能尚未在PATH中，请尝试使用python -m pip代替"
+    python3.11 -m pip --version || log_warn "pip模块可能未正确安装，请尝试使用python3.11 -m ensurepip"
     
     log_info "Python 3.11 和 pip 设置完成，并已设为默认"
 }
