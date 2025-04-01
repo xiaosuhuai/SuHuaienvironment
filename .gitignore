@@ -1,0 +1,23 @@
+# 操作系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器/IDE文件
+.vscode/
+.idea/
+*.sublime-*
+*.swp
+*.swo
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.bak
+*~
+
+# 本地配置文件
+local_config.sh 
