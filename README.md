@@ -21,24 +21,27 @@
 
 ### 方法1：一行命令运行（推荐）
 
-直接使用以下命令一键安装（需要提供GitHub邮箱）：
+直接使用以下命令一键安装：
 
 ```bash
 # 最佳方式：使用bash执行远程脚本
-bash <(curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh) -e your_email@example.com
+bash <(curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh)
+
+# 指定SSH密钥名称（可选）
+bash <(curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh) -n my_github_key
 
 # 或者使用wget
-bash <(wget -qO- https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh) -e your_email@example.com
+bash <(wget -qO- https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh)
 ```
 
 以下方式也可以使用，但可能不如上面的方式可靠：
 
 ```bash
 # 使用curl管道传输到bash
-curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash -s -- -e your_email@example.com
+curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash
 
 # 或使用wget管道传输到bash
-wget -qO- https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash -s -- -e your_email@example.com
+wget -qO- https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash
 ```
 
 ### 方法2：克隆仓库运行
@@ -62,12 +65,12 @@ sudo ./server_setup.sh
 脚本支持以下命令行参数：
 
 - `-y, --yes`: 自动确认所有提示，无需交互
-- `-e, --email`: 指定GitHub邮箱地址（通过管道运行时必需）
+- `-n, --name`: 指定SSH密钥名称（默认为`github_主机名`）
 
 示例：
 ```bash
-# 自动确认模式
-sudo ./server_setup.sh -y -e your_email@example.com
+# 自动确认模式并指定SSH密钥名称
+sudo ./server_setup.sh -y -n my_github_key
 ```
 
 ## 脚本执行流程
@@ -80,7 +83,8 @@ sudo ./server_setup.sh -y -e your_email@example.com
    - 验证安装结果，包括Python和pip版本
 
 2. **GitHub SSH密钥配置**：
-   - 检查是否已存在SSH密钥
+   - 配置SSH密钥名称（默认为`github_主机名`）
+   - 检查是否已存在指定名称的SSH密钥
    - 如果不存在，生成新的SSH密钥
    - 显示公钥，用户需要将其添加到GitHub账户
    - 测试SSH连接，确认配置成功
@@ -96,6 +100,7 @@ sudo ./server_setup.sh -y -e your_email@example.com
 - **pip安装失败**：某些系统上，系统自带的pip可能会导致安装冲突。脚本现已增加`--ignore-installed`选项，避免卸载系统pip
 - **找不到pip命令**：如果pip命令不可用，请尝试使用`python3.11 -m pip`命令代替
 - **脚本执行过程中退出**：尝试使用`bash <(curl ...)`方式运行脚本，而不是`curl ... | bash`
+- **SSH密钥命名**：如果您需要管理多个GitHub密钥，可以通过`-n`参数为每个密钥指定不同的名称
 
 ## 贡献
 

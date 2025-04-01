@@ -190,49 +190,44 @@ install_python() {
     log_info "Python 3.11 和 pip 设置完成，并已设为默认"
 }
 
-# 获取GitHub邮箱
-get_github_email() {
+# 获取SSH密钥名称
+get_ssh_key_name() {
+    # 设置默认密钥名称
+    if [ -z "$SSH_KEY_NAME" ]; then
+        # 如果未提供名称，使用默认名称
+        SSH_KEY_NAME="github_$(hostname -s)"
+    fi
+    
     # 检查是否在终端中运行
     if [ -t 0 ] && [ -t 1 ]; then  # 如果标准输入和标准输出都连接到终端
         # 即使提供了命令行参数，也询问用户是否想要在终端输入
-        if [ -n "$GITHUB_EMAIL" ]; then
-            log_info "检测到命令行提供的邮箱: $GITHUB_EMAIL"
-            read -p "是否使用此邮箱? (y/n): " use_provided_email
-            if [[ $use_provided_email != "y" && $use_provided_email != "Y" ]]; then
-                GITHUB_EMAIL=""  # 清空已提供的邮箱
+        if [ -n "$SSH_KEY_NAME" ]; then
+            log_info "将使用密钥名称: $SSH_KEY_NAME"
+            read -p "是否使用此名称? (y/n): " use_provided_name
+            if [[ $use_provided_name != "y" && $use_provided_name != "Y" ]]; then
+                SSH_KEY_NAME=""  # 清空已提供的名称
             fi
         fi
         
-        # 如果没有邮箱，则请求用户输入
-        if [ -z "$GITHUB_EMAIL" ]; then
-            while true; do
-                read -p "请输入您的GitHub邮箱: " GITHUB_EMAIL
-                # 简单验证邮箱格式
-                if [[ $GITHUB_EMAIL =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-                    break
-                else
-                    log_error "邮箱格式不正确，请重新输入"
-                fi
-            done
-        fi
-    else
-        # 非终端环境，必须通过命令行参数提供邮箱
-        if [ -z "$GITHUB_EMAIL" ]; then
-            log_error "非交互式环境中执行脚本时未提供GitHub邮箱"
-            log_info "请使用 -e 参数提供邮箱，如: bash <(curl -sSL ...) -e your_email@example.com"
-            exit 1
+        # 如果没有名称，则请求用户输入
+        if [ -z "$SSH_KEY_NAME" ]; then
+            read -p "请输入SSH密钥名称 [默认: github_$(hostname -s)]: " SSH_KEY_NAME
+            # 如果用户没有输入，使用默认值
+            if [ -z "$SSH_KEY_NAME" ]; then
+                SSH_KEY_NAME="github_$(hostname -s)"
+            fi
         fi
     fi
     
-    log_info "将使用邮箱: $GITHUB_EMAIL"
+    log_info "将使用密钥名称: $SSH_KEY_NAME"
 }
 
 # 配置GitHub SSH密钥
 setup_github_ssh() {
     log_info "开始配置GitHub SSH密钥..."
     
-    # 获取GitHub邮箱
-    get_github_email
+    # 获取SSH密钥名称
+    get_ssh_key_name
     
     # 获取用户名，如果是通过sudo运行，则获取实际用户
     if [ -n "$SUDO_USER" ]; then
@@ -247,24 +242,22 @@ setup_github_ssh() {
         SSH_DIR="/root/.ssh"
     fi
     
-    # 确保SSH目录存在
-    mkdir -p "$SSH_DIR"
-    if [ "$USERNAME" != "root" ]; then
-        chown -R $USERNAME:$USERNAME "$SSH_DIR"
-    fi
+    # SSH密钥文件路径
+    SSH_KEY_FILE="$SSH_DIR/${SSH_KEY_NAME}"
     
     # 配置密钥
-    if [ -f "$SSH_DIR/id_ed25519" ]; then
-        log_warn "SSH密钥已存在，使用现有密钥"
+    if [ -f "$SSH_KEY_FILE" ]; then
+        log_warn "SSH密钥 $SSH_KEY_NAME 已存在，使用现有密钥"
     else
-        log_info "使用邮箱 $GITHUB_EMAIL 生成SSH密钥"
+        log_info "生成新的SSH密钥: $SSH_KEY_NAME"
         
-        # 生成密钥
+        # 生成密钥 - 使用计算机名作为注释
         log_info "正在生成SSH密钥..."
+        COMMENT="$(whoami)@$(hostname)"
         if [ "$USERNAME" = "root" ]; then
-            ssh-keygen -t ed25519 -C "$GITHUB_EMAIL" -f "$SSH_DIR/id_ed25519" -N ""
+            ssh-keygen -t ed25519 -C "$COMMENT" -f "$SSH_KEY_FILE" -N ""
         else
-            su $USERNAME -c "ssh-keygen -t ed25519 -C \"$GITHUB_EMAIL\" -f \"$SSH_DIR/id_ed25519\" -N \"\""
+            su $USERNAME -c "ssh-keygen -t ed25519 -C \"$COMMENT\" -f \"$SSH_KEY_FILE\" -N \"\""
         fi
         
         # 启动ssh-agent
@@ -272,20 +265,28 @@ setup_github_ssh() {
         
         # 添加密钥到ssh-agent
         if [ "$USERNAME" = "root" ]; then
-            ssh-add "$SSH_DIR/id_ed25519"
+            ssh-add "$SSH_KEY_FILE"
         else
-            su $USERNAME -c "ssh-add $SSH_DIR/id_ed25519"
+            su $USERNAME -c "ssh-add \"$SSH_KEY_FILE\""
         fi
         
         # 配置SSH配置文件
         if [ ! -f "$SSH_DIR/config" ]; then
             echo "Host github.com
     User git
-    IdentityFile $SSH_DIR/id_ed25519
+    IdentityFile $SSH_KEY_FILE
     AddKeysToAgent yes" > "$SSH_DIR/config"
             
             if [ "$USERNAME" != "root" ]; then
                 chown $USERNAME:$USERNAME "$SSH_DIR/config"
+            fi
+        else
+            # 检查配置文件中是否已经有github.com的配置
+            if ! grep -q "Host github.com" "$SSH_DIR/config"; then
+                echo -e "\nHost github.com
+    User git
+    IdentityFile $SSH_KEY_FILE
+    AddKeysToAgent yes" >> "$SSH_DIR/config"
             fi
         fi
     fi
@@ -293,7 +294,7 @@ setup_github_ssh() {
     # 显示公钥
     log_info "请将以下SSH公钥添加到您的GitHub账户："
     echo ""
-    cat "$SSH_DIR/id_ed25519.pub"
+    cat "${SSH_KEY_FILE}.pub"
     echo ""
     log_info "请访问 https://github.com/settings/keys 并添加上面的SSH公钥"
     
@@ -307,9 +308,9 @@ setup_github_ssh() {
         # 测试连接
         log_info "测试与GitHub的连接..."
         if [ "$USERNAME" = "root" ]; then
-            ssh -T git@github.com -o StrictHostKeyChecking=no || true
+            ssh -T git@github.com -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no || true
         else
-            su $USERNAME -c "ssh -T git@github.com -o StrictHostKeyChecking=no" || true
+            su $USERNAME -c "ssh -T git@github.com -i \"$SSH_KEY_FILE\" -o StrictHostKeyChecking=no" || true
         fi
         
         # 一般情况下，即使成功GitHub也会返回非零退出码，但会显示欢迎消息
@@ -327,12 +328,17 @@ setup_github_ssh() {
 # 主函数
 main() {
     # 解析命令行参数
-    GITHUB_EMAIL=""
+    SSH_KEY_NAME=""
     
     while [ $# -gt 0 ]; do
         case "$1" in
+            -n|--name)
+                SSH_KEY_NAME="$2"
+                shift 2
+                ;;
             -e|--email)
-                GITHUB_EMAIL="$2"
+                # 兼容旧版本，忽略邮箱参数
+                log_warn "邮箱参数已被弃用，使用密钥名称(-n)参数代替"
                 shift 2
                 ;;
             -y|--yes)
