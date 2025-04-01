@@ -190,9 +190,49 @@ install_python() {
     log_info "Python 3.11 和 pip 设置完成，并已设为默认"
 }
 
+# 获取GitHub邮箱
+get_github_email() {
+    # 检查是否在终端中运行
+    if [ -t 0 ] && [ -t 1 ]; then  # 如果标准输入和标准输出都连接到终端
+        # 即使提供了命令行参数，也询问用户是否想要在终端输入
+        if [ -n "$GITHUB_EMAIL" ]; then
+            log_info "检测到命令行提供的邮箱: $GITHUB_EMAIL"
+            read -p "是否使用此邮箱? (y/n): " use_provided_email
+            if [[ $use_provided_email != "y" && $use_provided_email != "Y" ]]; then
+                GITHUB_EMAIL=""  # 清空已提供的邮箱
+            fi
+        fi
+        
+        # 如果没有邮箱，则请求用户输入
+        if [ -z "$GITHUB_EMAIL" ]; then
+            while true; do
+                read -p "请输入您的GitHub邮箱: " GITHUB_EMAIL
+                # 简单验证邮箱格式
+                if [[ $GITHUB_EMAIL =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+                    break
+                else
+                    log_error "邮箱格式不正确，请重新输入"
+                fi
+            done
+        fi
+    else
+        # 非终端环境，必须通过命令行参数提供邮箱
+        if [ -z "$GITHUB_EMAIL" ]; then
+            log_error "非交互式环境中执行脚本时未提供GitHub邮箱"
+            log_info "请使用 -e 参数提供邮箱，如: bash <(curl -sSL ...) -e your_email@example.com"
+            exit 1
+        fi
+    fi
+    
+    log_info "将使用邮箱: $GITHUB_EMAIL"
+}
+
 # 配置GitHub SSH密钥
 setup_github_ssh() {
     log_info "开始配置GitHub SSH密钥..."
+    
+    # 获取GitHub邮箱
+    get_github_email
     
     # 获取用户名，如果是通过sudo运行，则获取实际用户
     if [ -n "$SUDO_USER" ]; then
@@ -217,17 +257,6 @@ setup_github_ssh() {
     if [ -f "$SSH_DIR/id_ed25519" ]; then
         log_warn "SSH密钥已存在，使用现有密钥"
     else
-        # 获取用户的GitHub邮箱
-        if [ -z "$GITHUB_EMAIL" ]; then
-            if [ -t 0 ]; then  # 检查标准输入是否为终端
-                echo ""
-                read -p "请输入您的GitHub邮箱: " GITHUB_EMAIL
-            else
-                log_error "执行脚本时未提供GitHub邮箱。请使用 -e 参数提供邮箱，如: bash server_setup.sh -e your_email@example.com"
-                exit 1
-            fi
-        fi
-        
         log_info "使用邮箱 $GITHUB_EMAIL 生成SSH密钥"
         
         # 生成密钥
