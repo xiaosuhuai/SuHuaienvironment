@@ -24,10 +24,20 @@
 直接使用以下命令一键安装（需要提供GitHub邮箱）：
 
 ```bash
-# 使用curl
+# 最佳方式：使用bash执行远程脚本
+bash <(curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh) -e your_email@example.com
+
+# 或者使用wget
+bash <(wget -qO- https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh) -e your_email@example.com
+```
+
+以下方式也可以使用，但可能不如上面的方式可靠：
+
+```bash
+# 使用curl管道传输到bash
 curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash -s -- -e your_email@example.com
 
-# 或使用wget
+# 或使用wget管道传输到bash
 wget -qO- https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash -s -- -e your_email@example.com
 ```
 
@@ -80,6 +90,12 @@ sudo ./server_setup.sh -y -e your_email@example.com
 - 此脚本需要root权限运行
 - 如果您使用sudo运行脚本，SSH密钥将生成给实际的用户，而非root用户
 - 使用一行命令安装前，建议先检查脚本内容：`curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | less`
+
+## 故障排除
+
+- **pip安装失败**：某些系统上，系统自带的pip可能会导致安装冲突。脚本现已增加`--ignore-installed`选项，避免卸载系统pip
+- **找不到pip命令**：如果pip命令不可用，请尝试使用`python3.11 -m pip`命令代替
+- **脚本执行过程中退出**：尝试使用`bash <(curl ...)`方式运行脚本，而不是`curl ... | bash`
 
 ## 贡献
 
