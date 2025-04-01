@@ -19,24 +19,45 @@
 
 ## 快速开始
 
-### 1. 获取脚本
+### 方法1：一行命令运行（推荐）
+
+直接使用以下命令一键安装（需要提供GitHub邮箱）：
+
+```bash
+# 使用curl
+curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash -s -- -e your_email@example.com
+
+# 或使用wget
+wget -qO- https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | sudo bash -s -- -e your_email@example.com
+```
+
+### 方法2：克隆仓库运行
 
 ```bash
 git clone https://github.com/xiaosuhuai/SuHuaienvironment.git
 cd SuHuaienvironment
+sudo ./server_setup.sh
 ```
 
-或者直接下载脚本：
+### 方法3：下载脚本运行
 
 ```bash
 wget https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh
 chmod +x server_setup.sh
+sudo ./server_setup.sh
 ```
 
-### 2. 运行脚本
+## 命令行参数
 
+脚本支持以下命令行参数：
+
+- `-y, --yes`: 自动确认所有提示，无需交互
+- `-e, --email`: 指定GitHub邮箱地址（通过管道运行时必需）
+
+示例：
 ```bash
-sudo ./server_setup.sh
+# 自动确认模式
+sudo ./server_setup.sh -y -e your_email@example.com
 ```
 
 ## 脚本执行流程
@@ -58,6 +79,7 @@ sudo ./server_setup.sh
 
 - 此脚本需要root权限运行
 - 如果您使用sudo运行脚本，SSH密钥将生成给实际的用户，而非root用户
+- 使用一行命令安装前，建议先检查脚本内容：`curl -sSL https://raw.githubusercontent.com/xiaosuhuai/SuHuaienvironment/main/server_setup.sh | less`
 
 ## 贡献
 

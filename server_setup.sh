@@ -6,6 +6,32 @@
 
 set -e  # 出错时停止脚本执行
 
+# 检测是否通过管道运行
+if [ -t 1 ]; then
+    # 终端运行
+    AUTO_CONFIRM=false
+else
+    # 管道运行
+    AUTO_CONFIRM=true
+fi
+
+# 解析命令行参数
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -y|--yes)
+            AUTO_CONFIRM=true
+            shift
+            ;;
+        -e|--email)
+            GITHUB_EMAIL="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,7 +82,7 @@ detect_os() {
     log_info "检测到操作系统: $OS $OS_VERSION"
 }
 
-# 安装Python 3.11
+# 安装Python 3.11和pip
 install_python() {
     log_info "检查Python 3.11..."
     
@@ -79,7 +105,16 @@ install_python() {
             apt install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils
             
             # 安装pip
+            log_info "安装pip..."
             curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+            
+            # 确保pip命令可用
+            if [ ! -L /usr/bin/pip ]; then
+                ln -s /usr/local/bin/pip3.11 /usr/bin/pip
+            fi
+            if [ ! -L /usr/bin/pip3 ]; then
+                ln -s /usr/local/bin/pip3.11 /usr/bin/pip3
+            fi
         elif [[ "$OS" == "CentOS"* ]] || [[ "$OS" == "Red Hat"* ]] || [[ "$OS" == "Fedora"* ]]; then
             # 在CentOS/RHEL上安装Python 3.11
             if [[ "$OS" == "CentOS"* ]] && [[ "$OS_VERSION" == "7"* ]]; then
@@ -93,18 +128,59 @@ install_python() {
                 cd Python-3.11.0
                 ./configure --enable-optimizations
                 make altinstall
+                
+                # 安装pip
+                log_info "安装pip..."
+                curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+                
+                # 确保pip命令可用
+                if [ ! -L /usr/bin/pip ]; then
+                    ln -s /usr/local/bin/pip3.11 /usr/bin/pip
+                fi
+                if [ ! -L /usr/bin/pip3 ]; then
+                    ln -s /usr/local/bin/pip3.11 /usr/bin/pip3
+                fi
+                
                 cd /tmp
                 rm -rf Python-3.11.0*
             else
                 # CentOS 8/Fedora/RHEL 8
                 dnf install -y python3.11 python3.11-devel
+                
+                # 安装pip
+                log_info "安装pip..."
+                curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+                
+                # 确保pip命令可用
+                if [ ! -L /usr/bin/pip ]; then
+                    ln -s /usr/local/bin/pip3.11 /usr/bin/pip
+                fi
+                if [ ! -L /usr/bin/pip3 ]; then
+                    ln -s /usr/local/bin/pip3.11 /usr/bin/pip3
+                fi
             fi
         else
             log_error "不支持的操作系统: $OS"
             exit 1
         fi
         
-        log_info "Python 3.11 安装完成"
+        log_info "Python 3.11 和 pip 安装完成"
+    fi
+    
+    # 检查pip是否已安装
+    if ! command -v pip &> /dev/null; then
+        log_info "安装pip..."
+        curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+        
+        # 确保pip命令可用
+        if [ ! -L /usr/bin/pip ]; then
+            ln -s /usr/local/bin/pip3.11 /usr/bin/pip
+        fi
+        if [ ! -L /usr/bin/pip3 ]; then
+            ln -s /usr/local/bin/pip3.11 /usr/bin/pip3
+        fi
+    else
+        log_info "pip 已安装"
     fi
     
     # 将Python 3.11设置为默认Python版本
@@ -133,12 +209,13 @@ install_python() {
         ln -s /usr/bin/python3 /usr/bin/python
     fi
     
-    # 验证Python版本
-    log_info "验证Python版本..."
+    # 验证Python和pip版本
+    log_info "验证Python和pip版本..."
     python3 --version
     python --version
+    pip --version
     
-    log_info "Python 3.11 设置完成，并已设为默认Python解释器"
+    log_info "Python 3.11 和 pip 设置完成，并已设为默认"
 }
 
 # 配置GitHub SSH密钥
@@ -169,15 +246,24 @@ setup_github_ssh() {
         log_warn "SSH密钥已存在，使用现有密钥"
     else
         # 获取用户的GitHub邮箱
-        echo ""
-        read -p "请输入您的GitHub邮箱: " github_email
+        if [ -z "$GITHUB_EMAIL" ]; then
+            if [ "$AUTO_CONFIRM" = true ]; then
+                log_error "通过管道执行脚本时，请提供GitHub邮箱，例如: curl ... | bash -s -- -e your_email@example.com"
+                exit 1
+            else
+                echo ""
+                read -p "请输入您的GitHub邮箱: " GITHUB_EMAIL
+            fi
+        fi
+        
+        log_info "使用邮箱 $GITHUB_EMAIL 生成SSH密钥"
         
         # 生成密钥
         log_info "正在生成SSH密钥..."
         if [ "$USERNAME" = "root" ]; then
-            ssh-keygen -t ed25519 -C "$github_email" -f "$SSH_DIR/id_ed25519" -N ""
+            ssh-keygen -t ed25519 -C "$GITHUB_EMAIL" -f "$SSH_DIR/id_ed25519" -N ""
         else
-            su $USERNAME -c "ssh-keygen -t ed25519 -C \"$github_email\" -f \"$SSH_DIR/id_ed25519\" -N \"\""
+            su $USERNAME -c "ssh-keygen -t ed25519 -C \"$GITHUB_EMAIL\" -f \"$SSH_DIR/id_ed25519\" -N \"\""
         fi
         
         # 启动ssh-agent
@@ -210,25 +296,30 @@ setup_github_ssh() {
     echo ""
     log_info "请访问 https://github.com/settings/keys 并添加上面的SSH公钥"
     
-    # 等待用户确认
-    read -p "添加密钥后，按回车键继续..." continue
-    
-    # 测试连接
-    log_info "测试与GitHub的连接..."
-    if [ "$USERNAME" = "root" ]; then
-        ssh -T git@github.com -o StrictHostKeyChecking=no || true
+    if [ "$AUTO_CONFIRM" = true ]; then
+        log_info "由于是自动运行模式，请手动完成SSH密钥添加后再测试连接"
+        log_info "可以使用以下命令测试连接：ssh -T git@github.com"
     else
-        su $USERNAME -c "ssh -T git@github.com -o StrictHostKeyChecking=no" || true
-    fi
-    
-    # 一般情况下，即使成功GitHub也会返回非零退出码，但会显示欢迎消息
-    log_info "如果看到'Hi username! You've successfully authenticated...'说明成功认证"
-    read -p "连接是否成功? (y/n): " is_success
-    
-    if [[ $is_success == "y" || $is_success == "Y" ]]; then
-        log_info "GitHub SSH配置完成！"
-    else
-        log_error "GitHub SSH配置未成功，请检查错误信息"
+        # 等待用户确认
+        read -p "添加密钥后，按回车键继续..." continue
+        
+        # 测试连接
+        log_info "测试与GitHub的连接..."
+        if [ "$USERNAME" = "root" ]; then
+            ssh -T git@github.com -o StrictHostKeyChecking=no || true
+        else
+            su $USERNAME -c "ssh -T git@github.com -o StrictHostKeyChecking=no" || true
+        fi
+        
+        # 一般情况下，即使成功GitHub也会返回非零退出码，但会显示欢迎消息
+        log_info "如果看到'Hi username! You've successfully authenticated...'说明成功认证"
+        read -p "连接是否成功? (y/n): " is_success
+        
+        if [[ $is_success == "y" || $is_success == "Y" ]]; then
+            log_info "GitHub SSH配置完成！"
+        else
+            log_error "GitHub SSH配置未成功，请检查错误信息"
+        fi
     fi
 }
 
@@ -243,13 +334,17 @@ main() {
     detect_os
     
     echo "将执行以下操作:"
-    echo "- 安装Python 3.11并设置为默认版本"
+    echo "- 安装Python 3.11和pip，并设置为默认版本"
     echo "- 配置GitHub SSH密钥"
     
-    read -p "是否继续? (y/n): " confirm
-    if [[ $confirm != "y" && $confirm != "Y" ]]; then
-        log_info "操作已取消"
-        exit 0
+    if [ "$AUTO_CONFIRM" = true ]; then
+        log_info "自动确认模式，将直接执行操作"
+    else
+        read -p "是否继续? (y/n): " confirm
+        if [[ $confirm != "y" && $confirm != "Y" ]]; then
+            log_info "操作已取消"
+            exit 0
+        fi
     fi
     
     # 执行任务
