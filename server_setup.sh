@@ -6,32 +6,6 @@
 
 set -e  # 出错时停止脚本执行
 
-# 检测是否通过管道运行
-if [ -t 1 ]; then
-    # 终端运行
-    AUTO_CONFIRM=false
-else
-    # 管道运行
-    AUTO_CONFIRM=true
-fi
-
-# 解析命令行参数
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -y|--yes)
-            AUTO_CONFIRM=true
-            shift
-            ;;
-        -e|--email)
-            GITHUB_EMAIL="$2"
-            shift 2
-            ;;
-        *)
-            shift
-            ;;
-    esac
-done
-
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -247,12 +221,12 @@ setup_github_ssh() {
     else
         # 获取用户的GitHub邮箱
         if [ -z "$GITHUB_EMAIL" ]; then
-            if [ "$AUTO_CONFIRM" = true ]; then
-                log_error "通过管道执行脚本时，请提供GitHub邮箱，例如: curl ... | bash -s -- -e your_email@example.com"
-                exit 1
-            else
+            if [ -t 0 ]; then  # 检查标准输入是否为终端
                 echo ""
                 read -p "请输入您的GitHub邮箱: " GITHUB_EMAIL
+            else
+                log_error "执行脚本时未提供GitHub邮箱。请使用 -e 参数提供邮箱，如: bash server_setup.sh -e your_email@example.com"
+                exit 1
             fi
         fi
         
@@ -296,8 +270,8 @@ setup_github_ssh() {
     echo ""
     log_info "请访问 https://github.com/settings/keys 并添加上面的SSH公钥"
     
-    if [ "$AUTO_CONFIRM" = true ]; then
-        log_info "由于是自动运行模式，请手动完成SSH密钥添加后再测试连接"
+    if [ ! -t 0 ] || [ ! -t 1 ]; then  # 如果不是在终端中运行
+        log_info "由于非交互式运行，请手动完成SSH密钥添加后再测试连接"
         log_info "可以使用以下命令测试连接：ssh -T git@github.com"
     else
         # 等待用户确认
@@ -325,6 +299,25 @@ setup_github_ssh() {
 
 # 主函数
 main() {
+    # 解析命令行参数
+    GITHUB_EMAIL=""
+    
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -e|--email)
+                GITHUB_EMAIL="$2"
+                shift 2
+                ;;
+            -y|--yes)
+                # 只是为保持兼容性，现在不再需要这个标志
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+    
     clear
     echo "=========================================================="
     echo "             服务器配置脚本 - Python与GitHub               "
@@ -337,14 +330,15 @@ main() {
     echo "- 安装Python 3.11和pip，并设置为默认版本"
     echo "- 配置GitHub SSH密钥"
     
-    if [ "$AUTO_CONFIRM" = true ]; then
-        log_info "自动确认模式，将直接执行操作"
-    else
+    # 检查是否在终端运行，决定是否需要用户确认
+    if [ -t 0 ] && [ -t 1 ]; then  # 如果标准输入和标准输出都连接到终端
         read -p "是否继续? (y/n): " confirm
         if [[ $confirm != "y" && $confirm != "Y" ]]; then
             log_info "操作已取消"
             exit 0
         fi
+    else
+        log_info "自动模式，跳过确认"
     fi
     
     # 执行任务
@@ -355,4 +349,4 @@ main() {
 }
 
 # 执行主函数
-main 
+main "$@" 
